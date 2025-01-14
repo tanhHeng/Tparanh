@@ -46,7 +46,7 @@ class QQWebSocketClient(WebSocketApp, Proxy):
 
             self.on_api_message(message)
 
-            if "post_type" in message.keys() and message["post_type"] == "message":
+            if "post_type" in message.keys() and message["post_type"] == "message" and (message["message_type"] != "group" or message["group_id"] in self.qq_groups):
                 for i in self.plugins:
                     if hasattr(i, "on_message"):
                         i.on_message(message)

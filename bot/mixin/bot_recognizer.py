@@ -9,6 +9,7 @@ recognizer.load()
 @new_thread()
 def on_message(self: Proxy, message):
     content = QQMessageContent(message)
+    self.logger.info(content.text)
 
     if content.reply_msg is not None and content.text == "导":
         reply_content = QQMessageContent(self.get_msg(content.reply_msg))
