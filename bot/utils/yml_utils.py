@@ -21,3 +21,6 @@ class YamlData:
             self.logger.warning(f"Cannot fetch key `{key}` in file `{self.file_path}`")
             return
         return value
+    
+    def get(self, key: str):
+        return self.data.get(key)
