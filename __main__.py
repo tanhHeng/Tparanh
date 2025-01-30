@@ -1,7 +1,10 @@
+import os, sys
+sys.path.append(os.getcwd())
+
 from Tparanh.bot.utils.yml_utils import YamlData
-from Tparanh.bot.bot import QQWebSocketClient
+from Tparanh.bot import TparanhBot
 
 if __name__ == "__main__":
-    config = YamlData("./Tparanh/config.yml")
-    bot = QQWebSocketClient(url=config.get("url"), uin=config.get("uin"), qq_groups=config.get("qq_groups"), admin=config.get("admin"))
+    config = YamlData("config.yml")
+    bot = TparanhBot(config)
     bot.start()

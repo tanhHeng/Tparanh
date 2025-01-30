@@ -55,3 +55,7 @@ def matchshape(shape1, shape2):
         if i != k:
             return False
     return True
+
+def top_bottom_padding(img):
+    height = img.shape[1]
+    return cv2.copyMakeBorder(img, height, height, 0, 0, cv2.BORDER_REPLICATE)

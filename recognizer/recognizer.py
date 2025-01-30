@@ -12,7 +12,7 @@ class Boxes:
 
 class ParadigmRecognizer_SelectingScreen:
     
-    def __init__(self, init_img=None, records_file: pd.DataFrame=pd.DataFrame(), use_gpu=True,
+    def __init__(self, init_img=None, records_file: pd.DataFrame=pd.DataFrame(), use_gpu=False,
                  boxes: Boxes=None):
         self.record_regex = re.compile(r"[0-9]{7}")
         self.level_regex = re.compile(r"[0-9]{1,2}\+?")
@@ -29,7 +29,7 @@ class ParadigmRecognizer_SelectingScreen:
         
         self.img_shape = init_img.shape
         self._init_recognize(init_img)
-        print(f"Initialized {self.img_shape}.")
+        # print(f"Initialized {self.img_shape}.")
 
     def _init_recognize(self, init_img):
         # OCR
@@ -75,7 +75,7 @@ class ParadigmRecognizer_SelectingScreen:
 
         # level_box
         self.level_box = ((record_box[0][0], song_level[0]["position"][0][1]), (play_box[2][0], song_level[0]["position"][2][1]))
-        print("Boxes completed.")
+        # print("Boxes completed.")
 
         self.latest_log = "NAME\tLEVEL\tDIFFICULTY\tRECORD"
         self.latest_update_log = "NAME\tDIFFICULTY(LEVEL)\tRECORD0->RECORD1"
@@ -96,13 +96,13 @@ class ParadigmRecognizer_SelectingScreen:
         return result["text"]
 
     def recognize_record(self, record_img):
-        record = self.cn_ocr.fast_recognize(to_black_white(record_img))
+        record = self.cn_ocr.fast_recognize(top_bottom_padding(to_black_white(record_img)))
         if not record:
             return
         else:
             record = record["text"]
         if not self.record_regex.fullmatch(record):
-            record2 = self.cn_ocr.fast_recognize(to_black_white(record_img, 240, True))
+            record2 = self.cn_ocr.fast_recognize(top_bottom_padding(record_img))
             if not record2:
                 return record
             record2 = record2["text"]
@@ -192,7 +192,7 @@ class ParadigmRecognizer_SelectingScreen:
 
 class ParadigmRecognizer_ScoreScreen(ParadigmRecognizer_SelectingScreen):
 
-    def __init__(self, init_img=None, records_file="records.csv", use_gpu=True,
+    def __init__(self, init_img=None, records_file=pd.DataFrame(), use_gpu=True,
                  boxes: Boxes=None):
         super().__init__(init_img, records_file, use_gpu, boxes)
 
@@ -244,21 +244,28 @@ class ParadigmRecognizer_ScoreScreen(ParadigmRecognizer_SelectingScreen):
         matches = [get_string_similarity(i, text) for i in difficulties]
         if max(matches) < 0.7:
             return
-        return difficulties[np.argmax(matches)]      
+        return difficulties[np.argmax(matches)]
+
+    def _match_difficulty_string(self, string: str, difficulty: str):
+        string, difficulty = string.upper(), difficulty.upper()
+        result = []
+        for i in range(len(string)):
+            result.append(get_string_similarity(string[:i], difficulty))
+        return string[:np.argmax(result)]
 
     def recognize(self, img, record_log = False, ignore_idx = None):
         if not matchshape(img.shape, self.img_shape):
             raise TypeError("Mismatch image shape.")
 
         name, score = self.fast_ocr(to_black_white(split_img(img, self.name_box)), True)
-        level, level_score = self.fast_ocr(split_img(img, self.level_box), True)
+        level_text, level_score = self.fast_ocr(top_bottom_padding(split_img(img, self.level_box)), True)
         record = self.recognize_record(split_img(img, self.record_box))
-        difficulty = self._match_difficulty(level)
+        difficulty = self._match_difficulty(level_text)
         if not difficulty:
-            raise TypeError("Cannot recognize difficulty.")
-        level = re.match(difficulty+r"\s*(?P<level>[0-9]{1,2}\+?)", level, re.IGNORECASE)
+            raise TypeError(f"Cannot recognize difficulty: '{level_text}'.")
+        level = re.match((difficulty if difficulty in level_text else self._match_difficulty_string(level_text, difficulty))+r"\s*(?P<level>[0-9]{1,2}\+?)", level_text, re.IGNORECASE)
         if not level:
-            raise TypeError("Cannot recognize level.")
+            raise TypeError(f"Cannot recognize level: '{level_text}'.")
         level = level.group("level")
         idx, similarity = self.search(name, level)
 

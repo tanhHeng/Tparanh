@@ -1,9 +1,12 @@
-import json
+import json, os
 import pandas as pd
 from .recognizer import Boxes, ParadigmRecognizer_ScoreScreen, ParadigmRecognizer_SelectingScreen
 from typing import List
 import time
 from .utils.recognizer_utils import matchshape, to_better_timer
+import logging
+
+logger = logging.getLogger()
 
 class Config:
     selecting: List[Boxes]
@@ -11,11 +14,12 @@ class Config:
 
 class ParadigmRecognizerAuto:
 
-    def __init__(self, records_file, config: Config={"selecting":[], "score":[]}, use_gpu=True):
-        self.config = config
+    def __init__(self, records_file, config_file: str = "recognizer.json", use_gpu=True):
+        self.config_file = config_file
+        self.load()
         self.recognizers = {"selecting":{}, "score":{}}
         self.use_gpu = use_gpu
-        self.records_file = pd.read_csv(records_file, index_col="song_level_id")
+        self.records_file = pd.read_csv(records_file, index_col="song_level_id", encoding="utf-8")
     
     def _recognize(self, img, method, recognizer_class, log):
         t = time.time()
@@ -26,18 +30,18 @@ class ParadigmRecognizerAuto:
                     recognizer = self.recognizers[method][img_shape]
                     flag = "[Matched]"
                 else:
-                    recognizer = recognizer_class(boxes=i, use_gpu=self.use_gpu)
+                    recognizer = recognizer_class(records_file=self.records_file, boxes=i, use_gpu=self.use_gpu)
                     self.recognizers[method][img_shape] = recognizer
                     flag = "[Created]"
                 break
         else:
-            recognizer = recognizer_class(img, use_gpu=self.use_gpu)
+            recognizer = recognizer_class(img, records_file=self.records_file, use_gpu=self.use_gpu)
             flag = "[New]"
             self.config[method].append(recognizer.export())
             self.recognizers[method][img_shape] = recognizer
         result = recognizer.recognize(img, record_log=log)
         if log:
-            print(flag, to_better_timer(time.time()-t), recognizer.latest_log)
+            logger.info(flag, to_better_timer(time.time()-t), recognizer.latest_log)
         return result
     
     def recognize_selecting(self, img, log=True):
@@ -46,11 +50,26 @@ class ParadigmRecognizerAuto:
     def recognize_score(self, img, log=True):
         return self._recognize(img, "score", ParadigmRecognizer_ScoreScreen, log)
 
-    def load(self, filename="config.json"):
-        with open(filename, "r") as file:
-            self.config = json.loads(file.read())
+    def recognize(self, img, log=True):
+        try:
+            try:
+                return self.recognize_score(img, log)
+            except Exception as e:
+                return self.recognize_selecting(img, log)
+        except Exception as e2:
+            raise str(e)+"\n"+str(e2)
+
+    def load(self):
+        filename = self.config_file
+        if os.path.isfile(filename):
+            with open(filename, "r") as file:
+                self.config = json.loads(file.read())
+        else:
+            self.config = {"selecting":[], "score":[]}
+            self.save()
     
-    def save(self, filename="config.json"):
+    def save(self):
+        filename = self.config_file
         with open(filename, "w+") as file:
             file.write(json.dumps(self.config, indent="    ", skipkeys=True, default= lambda x: int(x)))
     
